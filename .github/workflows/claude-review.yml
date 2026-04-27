@@ -23,7 +23,8 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           prompt: |
             You are reviewing pull request #${{ github.event.pull_request.number }} in ${{ github.repository }}.
-            Post a single review comment on the PR. Be concise and specific. Group findings under the headings below.
+
+            Write a single review comment in markdown, grouped under the three headings below.
 
             ## 1. PR title
             The title must follow Conventional Commits: it must start with one of
@@ -50,4 +51,11 @@ jobs:
             say so in one line — do not invent issues to fill space.
 
             End with a one-line overall verdict: APPROVE, REQUEST CHANGES, or COMMENT.
-          claude_args: '--model claude-sonnet-4-6'
+
+            Once you have written the review, POST IT to the PR by writing the markdown
+            to /tmp/review.md and then running:
+
+            gh pr comment ${{ github.event.pull_request.number }} --repo ${{ github.repository }} --body-file /tmp/review.md
+
+            Do not skip this step. The review only counts if it is posted to the PR.
+          claude_args: '--model claude-sonnet-4-6 --allowed-tools "Bash(gh pr comment:*),Write"'

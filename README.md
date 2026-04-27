@@ -1,63 +1,126 @@
 # claude-code-demo
 
-A minimal repository for demonstrating Claude Code as an automated reviewer in
-GitHub Actions. The application is a single static HTML page; the value being
-shown is the pull-request workflow, not the app itself.
+A small repo we use to show what Claude Code looks like wired into GitHub Actions
+as an automated PR reviewer. The app under review is a static HTML page with a
+textarea and a character counter. That part doesn't matter. The point is the
+review workflow.
 
-On every pull request, a workflow runs `anthropics/claude-code-action@v1` and
-posts a review comment that checks three things:
+When someone opens a pull request, a GitHub Action runs Claude against the diff
+and posts a review comment. The prompt tells Claude to check three things:
 
-1. **PR title** follows Conventional Commits (`feat:`, `fix:`, `chore:`,
-   `docs:`, `refactor:`, `test:`).
-2. **PR description** is non-empty and explains both *what* changed and *why*.
-3. **Code quality** in the diff — bugs, missing error handling, hardcoded
-   values that belong in configuration, and basic accessibility issues.
+- The PR title follows Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`,
+  `refactor:`, `test:`)
+- The PR description isn't empty and actually says what changed and why
+- The code in the diff looks reasonable: no obvious bugs, no missing error
+  handling, no hardcoded values that should be config, no glaring accessibility
+  problems
 
-## Repository contents
+The interesting file is `.github/workflows/claude-review.yml`. The whole review
+policy lives in the prompt block there, in plain English, version-controlled
+with the rest of the repo. If you want to change what Claude looks for, you edit
+the prompt and merge it like any other code change.
 
-| Path                                  | Purpose                                          |
-| ------------------------------------- | ------------------------------------------------ |
-| `index.html`                          | The demo page (textarea + character counter).    |
-| `.github/workflows/claude-review.yml` | The Claude review workflow.                      |
-| `.github/PULL_REQUEST_TEMPLATE.md`    | Prompts contributors for what / why / how to test. |
+## Running the demo
 
-## Setup
+The setup (installing the GitHub app, adding the API key secret) is already
+done on this repo, so you can go straight to running it. The whole thing takes
+about five minutes.
 
-These steps need to be done once per repository (or once per organization, if
-you install the app at the org level).
+### 1. Show the workflow file first
 
-1. **Install the Claude GitHub App.** Go to
-   [github.com/apps/claude](https://github.com/apps/claude) and install it on
-   the account or organization that owns this repository. Grant access to this
-   repository (or "All repositories" if you prefer).
-2. **Add the API key as a repository secret.** In GitHub, go to
-   *Settings → Secrets and variables → Actions → New repository secret*. Name
-   it `ANTHROPIC_API_KEY` and paste in a key from the Anthropic Console.
-3. **Confirm Actions are enabled.** *Settings → Actions → General* should allow
-   workflows to run and allow GitHub Actions to *create and approve pull
-   request comments* (this is the default for most repos).
+Before triggering anything, open `.github/workflows/claude-review.yml` on GitHub
+and walk through it. Two things to point out:
 
-That's it. The next pull request opened against this repo will trigger a
-review.
+The `prompt:` block is where the team's review standards live. It's just text.
+Anyone on the team can read it, propose changes, and merge them like any other
+code change.
 
-## How to demo this
+The trigger is `pull_request` with `opened, synchronize, reopened`. That means
+it runs on every new PR and every push to an open PR, but not on direct pushes
+to main.
 
-A 3–5 minute walkthrough that lands the point with a delivery team:
+### 2. Open a deliberately bad PR
 
-1. **Open the repo on GitHub** and show the workflow file at
-   `.github/workflows/claude-review.yml`. Point out the prompt — that's where
-   the team's review standards live, in plain English, version-controlled
-   alongside the code.
-2. **Create a deliberately bad PR.** From a new branch, change one line in
-   `index.html` (e.g., the page heading). Open a PR with:
-   - Title: `update stuff` (not Conventional Commits)
-   - Description: empty
-3. **Watch the Action run.** Within a minute or two, Claude posts a review
-   comment that flags the title, the empty description, and any code issues
-   it finds in the diff. Show the comment on the PR.
-4. **Fix the PR.** Rename it to `feat: update demo page heading`, fill in the
-   PR template, and push another commit. The workflow re-runs on
-   `synchronize` and posts an updated review.
-5. **Close with the takeaway.** The same pattern scales to real codebases:
-   the prompt is the team's review checklist, kept in the repo, applied
-   uniformly to every PR before a human reviewer ever opens it.
+From your terminal, in this repo:
+
+```
+git checkout -b demo/bad-pr
+# edit index.html — change the heading text, or anything else visible
+git add index.html
+git commit -m "update stuff"
+git push -u origin demo/bad-pr
+gh pr create --title "update stuff" --body ""
+```
+
+You're feeding Claude a PR that breaks all three rules at once: bad title, empty
+description, and a code change in the diff. That's the point. You want to see
+all three checks fire.
+
+### 3. Watch the Action run
+
+Open the Actions tab on the repo. The "Claude PR Review" job kicks off within a
+few seconds and usually finishes in 30 to 90 seconds.
+
+When it's done, go back to the PR. There will be a review comment from
+`claude[bot]`. It should:
+
+- Flag the title and suggest a Conventional Commits version
+- Point out that the description is empty
+- Comment on whatever you actually changed in the diff
+- End with a one-line verdict: APPROVE, REQUEST CHANGES, or COMMENT
+
+This is the moment in the demo. Read the comment out loud. The reviewer didn't
+write any of those checks by hand — they came from the prompt in the workflow
+file you showed in step 1.
+
+### 4. Fix the PR and watch it re-run
+
+Now make the PR good. Edit the title and body:
+
+```
+gh pr edit --title "feat: update demo page heading" --body "$(cat <<'EOF'
+## What changed
+Updated the heading text on the demo page.
+
+## Why
+Wanted something more descriptive for the team.
+
+## How to test
+Open index.html in a browser and confirm the new heading shows up.
+EOF
+)"
+```
+
+Title and body changes alone do not re-trigger the workflow. To re-run it, push
+a small follow-up commit (any change), or re-run the failed job from the Actions
+tab. The new review should pass, or come close.
+
+### 5. The takeaway
+
+The line worth landing: the prompt is the team's review checklist, kept in the
+repo, applied to every PR before a human reviewer opens it. It doesn't replace
+human review. It catches the obvious stuff so the human reviewer can spend their
+time on the parts that actually need judgment.
+
+The same pattern works on a real codebase. The prompt gets longer (testing
+requirements, architecture notes, security checks for the parts that need them),
+but the shape is the same as what's here.
+
+## Setting this up on another repo
+
+Three steps:
+
+1. Install the Claude GitHub App from `github.com/apps/claude` on the repo or
+   org that owns the codebase.
+2. Add `ANTHROPIC_API_KEY` as a repository secret under Settings → Secrets and
+   variables → Actions. The key comes from the Anthropic Console.
+3. Copy `.github/workflows/claude-review.yml` into the target repo. Edit the
+   prompt to match that team's review standards.
+
+That's the whole setup.
+
+## What's in this repo
+
+- `index.html` — the static demo page (textarea, character counter)
+- `.github/workflows/claude-review.yml` — the review workflow and prompt
+- `.github/PULL_REQUEST_TEMPLATE.md` — what / why / how to test sections
