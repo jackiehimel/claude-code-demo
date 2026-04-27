@@ -1,0 +1,53 @@
+name: Claude PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Claude review
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          prompt: |
+            You are reviewing pull request #${{ github.event.pull_request.number }} in ${{ github.repository }}.
+            Post a single review comment on the PR. Be concise and specific. Group findings under the headings below.
+
+            ## 1. PR title
+            The title must follow Conventional Commits: it must start with one of
+            `feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, or `test:` (a scope like
+            `feat(ui):` is also fine), followed by a short lowercase summary. Flag the
+            title if it does not match, and suggest a corrected version.
+
+            Current title: "${{ github.event.pull_request.title }}"
+
+            ## 2. PR description
+            The description must not be empty and must explain BOTH what changed and
+            why. If either is missing, say which section is missing and quote what is
+            there. A description that only repeats the title or only lists files is
+            not acceptable.
+
+            ## 3. Code quality
+            Review the diff for:
+            - Bugs or incorrect logic
+            - Missing error handling (e.g., unhandled promise rejections, missing input validation)
+            - Hardcoded values that should be configuration (URLs, magic numbers, credentials)
+            - Basic accessibility issues in HTML (missing labels, alt text, ARIA, semantic elements, keyboard support)
+
+            Only flag real issues found in the diff. If a section has no problems,
+            say so in one line — do not invent issues to fill space.
+
+            End with a one-line overall verdict: APPROVE, REQUEST CHANGES, or COMMENT.
+          claude_args: '--model claude-sonnet-4-6'
