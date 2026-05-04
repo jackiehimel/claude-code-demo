@@ -37,6 +37,4 @@ you install the app at the org level).
    workflows to run and allow GitHub Actions to *create and approve pull
    request comments* (this is the default for most repos).
 
-That's it. The next pull request opened against this repo will trigger a
-review.
 
